@@ -1,0 +1,485 @@
+###############################################################
+# Predicting Catastrophic Health Expenditure Risk Among Households
+#
+# Part 1
+#
+# Author: Joan Joshua
+###############################################################
+
+import os
+import warnings
+
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import pandas as pd
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+
+from sklearn.compose import ColumnTransformer
+
+from sklearn.pipeline import Pipeline
+
+from sklearn.impute import SimpleImputer
+
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    StandardScaler
+)
+
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    roc_auc_score
+)
+
+###############################################################
+# Create Project Folders
+###############################################################
+
+os.makedirs("outputs", exist_ok=True)
+os.makedirs("outputs/figures", exist_ok=True)
+os.makedirs("outputs/reports", exist_ok=True)
+os.makedirs("models", exist_ok=True)
+
+###############################################################
+# Load Dataset
+###############################################################
+
+DATA_PATH = "data/Synthetic_Predicting_Catastrophic_Health_Expenditure_Risk_Among_Households.xlsx"
+
+df = pd.read_excel(DATA_PATH)
+
+print("=" * 70)
+print("Dataset Loaded Successfully")
+print("=" * 70)
+
+print(df.head())
+
+print("\nShape")
+print(df.shape)
+
+###############################################################
+# Data Information
+###############################################################
+
+print("\nInformation")
+print(df.info())
+
+print("\nSummary Statistics")
+print(df.describe(include="all"))
+
+###############################################################
+# Missing Values
+###############################################################
+
+print("\nMissing Values")
+
+missing = df.isnull().sum()
+
+print(missing)
+
+missing.to_csv(
+    "outputs/reports/missing_values.csv"
+)
+
+###############################################################
+# Duplicate Records
+###############################################################
+
+duplicates = df.duplicated().sum()
+
+print("\nDuplicate Rows :", duplicates)
+
+###############################################################
+# Remove Duplicate Rows
+###############################################################
+
+df = df.drop_duplicates()
+
+###############################################################
+# Target Distribution
+###############################################################
+
+print("\nTarget Distribution")
+
+print(df["CHE_Risk"].value_counts())
+
+print(df["CHE_Risk"].value_counts(normalize=True))
+
+###############################################################
+# Basic Visual Style
+###############################################################
+
+plt.style.use("ggplot")
+
+sns.set(font_scale=1.0)
+
+###############################################################
+# Target Distribution Plot
+###############################################################
+
+plt.figure(figsize=(7,5))
+
+sns.countplot(
+    data=df,
+    x="CHE_Risk"
+)
+
+plt.title("Catastrophic Health Expenditure Risk")
+
+plt.savefig(
+    "outputs/figures/target_distribution.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+###############################################################
+# Household Size Distribution
+###############################################################
+
+plt.figure(figsize=(8,5))
+
+sns.histplot(
+    df["Household_Size"],
+    bins=10,
+    kde=True
+)
+
+plt.title("Household Size Distribution")
+
+plt.savefig(
+    "outputs/figures/household_size_distribution.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+###############################################################
+# Monthly Income Distribution
+###############################################################
+
+plt.figure(figsize=(8,5))
+
+sns.histplot(
+    df["Monthly_Income_USD"],
+    bins=30,
+    kde=True
+)
+
+plt.title("Monthly Household Income")
+
+plt.savefig(
+    "outputs/figures/monthly_income_distribution.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+###############################################################
+# Monthly Health Expenditure
+###############################################################
+
+plt.figure(figsize=(8,5))
+
+sns.histplot(
+    df["Monthly_Health_Exp_USD"],
+    bins=30,
+    kde=True
+)
+
+plt.title("Monthly Health Expenditure")
+
+plt.savefig(
+    "outputs/figures/monthly_health_expenditure.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+###############################################################
+# Region Distribution
+###############################################################
+
+plt.figure(figsize=(8,5))
+
+sns.countplot(
+    data=df,
+    x="Region"
+)
+
+plt.xticks(rotation=30)
+
+plt.title("Households by Region")
+
+plt.savefig(
+    "outputs/figures/region_distribution.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+###############################################################
+# Urban vs Rural
+###############################################################
+
+plt.figure(figsize=(6,5))
+
+sns.countplot(
+    data=df,
+    x="Urban_Rural"
+)
+
+plt.title("Urban vs Rural")
+
+plt.savefig(
+    "outputs/figures/urban_rural.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+###############################################################
+# Insurance Coverage
+###############################################################
+
+plt.figure(figsize=(6,5))
+
+sns.countplot(
+    data=df,
+    x="Insurance"
+)
+
+plt.title("Insurance Coverage")
+
+plt.savefig(
+    "outputs/figures/insurance.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+###############################################################
+# Correlation Matrix
+###############################################################
+
+numeric_df = df.select_dtypes(include=np.number)
+
+plt.figure(figsize=(12,8))
+
+sns.heatmap(
+    numeric_df.corr(),
+    annot=True,
+    cmap="coolwarm",
+    fmt=".2f"
+)
+
+plt.title("Correlation Matrix")
+
+plt.savefig(
+    "outputs/figures/correlation_matrix.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+###############################################################
+# Feature Engineering
+###############################################################
+
+# Income Category
+
+df["Income_Level"] = pd.cut(
+    df["Monthly_Income_USD"],
+    bins=[0,300,700,1500,5000],
+    labels=[
+        "Low",
+        "Lower-Middle",
+        "Middle",
+        "High"
+    ]
+)
+
+###############################################################
+
+# High Health Spending Indicator
+
+df["High_Health_Spending"] = (
+    df["Health_Exp_Income_Ratio"] > 0.20
+).astype(int)
+
+###############################################################
+
+# Vulnerable Household
+
+df["Vulnerable_Household"] = (
+    (
+        df["Children_U5"] +
+        df["Elderly_Members"]
+    ) >= 3
+).astype(int)
+
+###############################################################
+
+# Chronic Disease Burden
+
+df["High_Chronic_Burden"] = (
+    df["Chronic_Disease_Members"] >= 2
+).astype(int)
+
+###############################################################
+
+# Frequent Hospitalization
+
+df["Frequent_Hospitalization"] = (
+    df["Hospitalizations_Last12M"] >= 2
+).astype(int)
+
+###############################################################
+# Display Engineered Features
+###############################################################
+
+print(df.head())
+
+###############################################################
+# Feature List
+###############################################################
+
+TARGET = "CHE_Risk"
+
+X = df.drop(columns=[TARGET])
+
+y = df[TARGET]
+
+###############################################################
+# Identify Feature Types
+###############################################################
+
+categorical_features = X.select_dtypes(
+    include=["object","category"]
+).columns.tolist()
+
+numerical_features = X.select_dtypes(
+    include=np.number
+).columns.tolist()
+
+###############################################################
+# Remove ID Column
+###############################################################
+
+if "Household_ID" in categorical_features:
+
+    categorical_features.remove("Household_ID")
+
+X = X.drop(columns=["Household_ID"])
+
+###############################################################
+# Numerical Pipeline
+###############################################################
+
+numeric_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="median")
+        ),
+        (
+            "scaler",
+            StandardScaler()
+        )
+    ]
+)
+
+###############################################################
+# Categorical Pipeline
+###############################################################
+
+categorical_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="most_frequent")
+        ),
+        (
+            "encoder",
+            OneHotEncoder(
+                handle_unknown="ignore"
+            )
+        )
+    ]
+)
+
+###############################################################
+# Column Transformer
+###############################################################
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "num",
+            numeric_transformer,
+            numerical_features
+        ),
+        (
+            "cat",
+            categorical_transformer,
+            categorical_features
+        )
+    ]
+)
+
+###############################################################
+# Train Test Split
+###############################################################
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.20,
+    random_state=42,
+    stratify=y
+)
+
+print("="*60)
+
+print("Training Shape")
+
+print(X_train.shape)
+
+print("Testing Shape")
+
+print(X_test.shape)
+
+print("="*60)
+
+###############################################################
+# Save Processed Feature Lists
+###############################################################
+
+pd.Series(
+    numerical_features
+).to_csv(
+    "outputs/reports/numerical_features.csv",
+    index=False
+)
+
+pd.Series(
+    categorical_features
+).to_csv(
+    "outputs/reports/categorical_features.csv",
+    index=False
+)
+
+print("\nPart 1 Completed Successfully")
