@@ -1,0 +1,320 @@
+###############################################################
+# PART 2B.1
+# SECTION B
+# XGBoost + RandomizedSearchCV
+###############################################################
+
+from xgboost import XGBClassifier
+
+from sklearn.model_selection import (
+    RandomizedSearchCV,
+    cross_val_score
+)
+
+from scipy.stats import randint
+from scipy.stats import uniform
+
+###############################################################
+# Build XGBoost Pipeline
+###############################################################
+
+xgb_pipeline = Pipeline(
+    steps=[
+        ("preprocessor", preprocessor),
+
+        ("classifier",
+            XGBClassifier(
+                objective="binary:logistic",
+                eval_metric="logloss",
+                random_state=42,
+                tree_method="hist",
+                n_jobs=-1
+            )
+        )
+    ]
+)
+
+###############################################################
+# Hyperparameter Space
+###############################################################
+
+param_distributions = {
+
+    "classifier__n_estimators":
+        randint(200, 800),
+
+    "classifier__max_depth":
+        randint(3, 10),
+
+    "classifier__learning_rate":
+        uniform(0.01, 0.29),
+
+    "classifier__subsample":
+        uniform(0.6, 0.4),
+
+    "classifier__colsample_bytree":
+        uniform(0.6, 0.4),
+
+    "classifier__gamma":
+        uniform(0.0, 5.0),
+
+    "classifier__min_child_weight":
+        randint(1, 8),
+
+    "classifier__reg_alpha":
+        uniform(0.0, 2.0),
+
+    "classifier__reg_lambda":
+        uniform(0.5, 3.5)
+
+}
+
+###############################################################
+# Random Search
+###############################################################
+
+random_search = RandomizedSearchCV(
+
+    estimator=xgb_pipeline,
+
+    param_distributions=param_distributions,
+
+    n_iter=30,
+
+    scoring="roc_auc",
+
+    cv=cv,
+
+    verbose=2,
+
+    random_state=42,
+
+    n_jobs=-1,
+
+    refit=True
+
+)
+
+###############################################################
+# Train Model
+###############################################################
+
+print("="*70)
+print("Training XGBoost...")
+print("="*70)
+
+random_search.fit(
+    X_train,
+    y_train
+)
+
+###############################################################
+# Best Model
+###############################################################
+
+best_xgb = random_search.best_estimator_
+
+print("\nBest Parameters\n")
+
+print(random_search.best_params_)
+
+print("\nBest CV ROC AUC")
+
+print(random_search.best_score_)
+
+###############################################################
+# Cross Validation Scores
+###############################################################
+
+cv_scores = cross_val_score(
+
+    best_xgb,
+
+    X_train,
+
+    y_train,
+
+    cv=cv,
+
+    scoring="roc_auc",
+
+    n_jobs=-1
+
+)
+
+print("\nCross Validation Scores")
+
+print(cv_scores)
+
+print("\nMean ROC AUC")
+
+print(cv_scores.mean())
+
+print("\nStandard Deviation")
+
+print(cv_scores.std())
+
+###############################################################
+# Save CV Scores
+###############################################################
+
+cv_df = pd.DataFrame({
+
+    "Fold": np.arange(1, len(cv_scores)+1),
+
+    "ROC_AUC": cv_scores
+
+})
+
+cv_df.to_csv(
+
+    "outputs/reports/xgboost_cross_validation_scores.csv",
+
+    index=False
+
+)
+
+###############################################################
+# Save Best Parameters
+###############################################################
+
+best_params = pd.DataFrame(
+
+    list(random_search.best_params_.items()),
+
+    columns=["Parameter","Value"]
+
+)
+
+best_params.to_csv(
+
+    "outputs/reports/xgboost_best_parameters.csv",
+
+    index=False
+
+)
+
+###############################################################
+# Cross Validation Plot
+###############################################################
+
+plt.figure(figsize=(8,5))
+
+plt.plot(
+
+    cv_df["Fold"],
+
+    cv_df["ROC_AUC"],
+
+    marker="o",
+
+    linewidth=2
+
+)
+
+plt.xticks(cv_df["Fold"])
+
+plt.xlabel("Fold")
+
+plt.ylabel("ROC AUC")
+
+plt.title("XGBoost Cross Validation Performance")
+
+plt.grid(True)
+
+plt.savefig(
+
+    "outputs/figures/xgboost_cv_scores.png",
+
+    dpi=300,
+
+    bbox_inches="tight"
+
+)
+
+plt.close()
+
+###############################################################
+# Training Predictions
+###############################################################
+
+train_predictions = best_xgb.predict(X_train)
+
+train_probabilities = best_xgb.predict_proba(X_train)[:,1]
+
+###############################################################
+# Training Metrics
+###############################################################
+
+train_accuracy = accuracy_score(
+    y_train,
+    train_predictions
+)
+
+train_precision = precision_score(
+    y_train,
+    train_predictions
+)
+
+train_recall = recall_score(
+    y_train,
+    train_predictions
+)
+
+train_f1 = f1_score(
+    y_train,
+    train_predictions
+)
+
+train_auc = roc_auc_score(
+    y_train,
+    train_probabilities
+)
+
+training_results = pd.DataFrame({
+
+    "Metric":[
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "F1 Score",
+        "ROC AUC"
+    ],
+
+    "Value":[
+        train_accuracy,
+        train_precision,
+        train_recall,
+        train_f1,
+        train_auc
+    ]
+
+})
+
+training_results.to_csv(
+
+    "outputs/reports/xgboost_training_metrics.csv",
+
+    index=False
+
+)
+
+print("\nTraining Metrics")
+
+print(training_results)
+
+###############################################################
+# Save Search Object
+###############################################################
+
+import joblib
+
+joblib.dump(
+
+    random_search,
+
+    "models/xgboost_random_search.pkl"
+
+)
+
+print("\nSECTION B COMPLETED")
