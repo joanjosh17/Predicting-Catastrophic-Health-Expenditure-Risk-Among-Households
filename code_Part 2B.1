@@ -1,0 +1,177 @@
+###############################################################
+# PART 2B.1
+# SECTION A
+# Remove Target Leakage
+###############################################################
+
+print("\n" + "=" * 70)
+print("PART 2B.1 - SECTION A")
+print("Removing Target Leakage")
+print("=" * 70)
+
+# -------------------------------------------------------------
+# Rebuild Dataset
+# -------------------------------------------------------------
+
+TARGET = "CHE_Risk"
+
+# Columns that leak information into the target
+LEAKAGE_COLUMNS = [
+    "Health_Exp_Income_Ratio",
+    "High_Health_Spending"
+]
+
+ID_COLUMNS = [
+    "Household_ID"
+]
+
+DROP_COLUMNS = LEAKAGE_COLUMNS + ID_COLUMNS
+
+X = df.drop(columns=[TARGET] + DROP_COLUMNS)
+
+y = df[TARGET]
+
+print("\nRemaining Features")
+
+print(X.columns.tolist())
+
+print("\nTotal Features:", len(X.columns))
+
+###############################################################
+# Detect Feature Types Again
+###############################################################
+
+categorical_features = X.select_dtypes(
+    include=["object", "category"]
+).columns.tolist()
+
+numerical_features = X.select_dtypes(
+    include=["number"]
+).columns.tolist()
+
+print("\nCategorical Features")
+
+print(categorical_features)
+
+print("\nNumerical Features")
+
+print(numerical_features)
+
+###############################################################
+# Build New Preprocessing Pipeline
+###############################################################
+
+numeric_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="median")
+        ),
+        (
+            "scaler",
+            StandardScaler()
+        )
+    ]
+)
+
+categorical_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="most_frequent")
+        ),
+        (
+            "encoder",
+            OneHotEncoder(
+                handle_unknown="ignore"
+            )
+        )
+    ]
+)
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "num",
+            numeric_transformer,
+            numerical_features
+        ),
+        (
+            "cat",
+            categorical_transformer,
+            categorical_features
+        )
+    ]
+)
+
+###############################################################
+# New Train/Test Split
+###############################################################
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    stratify=y,
+    test_size=0.20,
+    random_state=42
+)
+
+print("\nTraining Shape")
+
+print(X_train.shape)
+
+print("\nTesting Shape")
+
+print(X_test.shape)
+
+###############################################################
+# Class Distribution
+###############################################################
+
+print("\nTraining Target Distribution")
+
+print(y_train.value_counts())
+
+print("\nTraining Target Percentage")
+
+print(
+    y_train.value_counts(normalize=True)
+)
+
+###############################################################
+# Stratified KFold
+###############################################################
+
+from sklearn.model_selection import StratifiedKFold
+
+cv = StratifiedKFold(
+    n_splits=5,
+    shuffle=True,
+    random_state=42
+)
+
+print("\nCross Validation Strategy")
+
+print(cv)
+
+###############################################################
+# Save Feature Names
+###############################################################
+
+pd.Series(
+    numerical_features
+).to_csv(
+    "outputs/reports/final_numerical_features.csv",
+    index=False
+)
+
+pd.Series(
+    categorical_features
+).to_csv(
+    "outputs/reports/final_categorical_features.csv",
+    index=False
+)
+
+print("\nTarget Leakage Successfully Removed.")
+
+print("\nSECTION A COMPLETED")
