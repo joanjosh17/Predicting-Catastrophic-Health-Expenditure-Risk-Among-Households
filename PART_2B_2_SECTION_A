@@ -1,0 +1,330 @@
+###############################################################
+# PART 2B.2
+# SECTION A
+# LightGBM Hyperparameter Tuning
+###############################################################
+
+from lightgbm import LGBMClassifier
+
+from sklearn.model_selection import (
+    RandomizedSearchCV,
+    cross_val_score
+)
+
+from scipy.stats import randint, uniform
+
+###############################################################
+# Build LightGBM Pipeline
+###############################################################
+
+lgbm_pipeline = Pipeline(
+    steps=[
+        (
+            "preprocessor",
+            preprocessor
+        ),
+
+        (
+            "classifier",
+
+            LGBMClassifier(
+
+                objective="binary",
+
+                boosting_type="gbdt",
+
+                random_state=42,
+
+                n_jobs=-1,
+
+                verbose=-1
+
+            )
+        )
+
+    ]
+)
+
+###############################################################
+# Hyperparameter Space
+###############################################################
+
+lgbm_params = {
+
+    "classifier__n_estimators":
+        randint(200,1000),
+
+    "classifier__learning_rate":
+        uniform(0.01,0.29),
+
+    "classifier__num_leaves":
+        randint(20,120),
+
+    "classifier__max_depth":
+        randint(3,12),
+
+    "classifier__min_child_samples":
+        randint(10,80),
+
+    "classifier__subsample":
+        uniform(0.60,0.40),
+
+    "classifier__colsample_bytree":
+        uniform(0.60,0.40),
+
+    "classifier__reg_alpha":
+        uniform(0,5),
+
+    "classifier__reg_lambda":
+        uniform(0,5)
+
+}
+
+###############################################################
+# Randomized Search
+###############################################################
+
+lgbm_search = RandomizedSearchCV(
+
+    estimator=lgbm_pipeline,
+
+    param_distributions=lgbm_params,
+
+    n_iter=30,
+
+    cv=cv,
+
+    scoring="roc_auc",
+
+    random_state=42,
+
+    verbose=2,
+
+    n_jobs=-1,
+
+    refit=True
+
+)
+
+###############################################################
+# Train Model
+###############################################################
+
+print("="*70)
+print("Training LightGBM...")
+print("="*70)
+
+lgbm_search.fit(
+    X_train,
+    y_train
+)
+
+###############################################################
+# Best Model
+###############################################################
+
+best_lgbm = lgbm_search.best_estimator_
+
+print("\nBest Parameters\n")
+
+print(
+    lgbm_search.best_params_
+)
+
+print("\nBest CV ROC AUC")
+
+print(
+    lgbm_search.best_score_
+)
+
+###############################################################
+# Cross Validation
+###############################################################
+
+lgbm_cv = cross_val_score(
+
+    best_lgbm,
+
+    X_train,
+
+    y_train,
+
+    cv=cv,
+
+    scoring="roc_auc",
+
+    n_jobs=-1
+
+)
+
+print("\nCross Validation Scores")
+
+print(lgbm_cv)
+
+print("\nMean ROC AUC")
+
+print(lgbm_cv.mean())
+
+###############################################################
+# Save CV Results
+###############################################################
+
+cv_results = pd.DataFrame({
+
+    "Fold":
+        np.arange(1,len(lgbm_cv)+1),
+
+    "ROC_AUC":
+        lgbm_cv
+
+})
+
+cv_results.to_csv(
+
+    "outputs/reports/lightgbm_cv_scores.csv",
+
+    index=False
+
+)
+
+###############################################################
+# Save Best Parameters
+###############################################################
+
+params = pd.DataFrame(
+
+    list(lgbm_search.best_params_.items()),
+
+    columns=[
+        "Parameter",
+        "Value"
+    ]
+
+)
+
+params.to_csv(
+
+    "outputs/reports/lightgbm_best_parameters.csv",
+
+    index=False
+
+)
+
+###############################################################
+# Training Performance
+###############################################################
+
+train_pred = best_lgbm.predict(
+    X_train
+)
+
+train_prob = best_lgbm.predict_proba(
+    X_train
+)[:,1]
+
+train_metrics = pd.DataFrame({
+
+    "Metric":[
+
+        "Accuracy",
+
+        "Precision",
+
+        "Recall",
+
+        "F1 Score",
+
+        "ROC AUC"
+
+    ],
+
+    "Value":[
+
+        accuracy_score(
+            y_train,
+            train_pred
+        ),
+
+        precision_score(
+            y_train,
+            train_pred
+        ),
+
+        recall_score(
+            y_train,
+            train_pred
+        ),
+
+        f1_score(
+            y_train,
+            train_pred
+        ),
+
+        roc_auc_score(
+            y_train,
+            train_prob
+        )
+
+    ]
+
+})
+
+train_metrics.to_csv(
+
+    "outputs/reports/lightgbm_training_metrics.csv",
+
+    index=False
+
+)
+
+###############################################################
+# Cross Validation Plot
+###############################################################
+
+plt.figure(figsize=(8,5))
+
+plt.plot(
+
+    cv_results["Fold"],
+
+    cv_results["ROC_AUC"],
+
+    marker="o",
+
+    linewidth=2
+
+)
+
+plt.xlabel("Fold")
+
+plt.ylabel("ROC AUC")
+
+plt.title("LightGBM Cross Validation")
+
+plt.grid(True)
+
+plt.savefig(
+
+    "outputs/figures/lightgbm_cv_scores.png",
+
+    dpi=300,
+
+    bbox_inches="tight"
+
+)
+
+plt.close()
+
+###############################################################
+# Save Search Object
+###############################################################
+
+joblib.dump(
+
+    lgbm_search,
+
+    "models/lightgbm_random_search.pkl"
+
+)
+
+print("\nPART 2B.2 - SECTION A COMPLETED")
