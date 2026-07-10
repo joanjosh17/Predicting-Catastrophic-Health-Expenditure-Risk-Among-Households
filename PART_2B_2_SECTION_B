@@ -1,0 +1,386 @@
+###############################################################
+# PART 2B.2
+# SECTION B
+# Evaluate Tuned LightGBM Model
+###############################################################
+
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+    classification_report,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    RocCurveDisplay,
+    PrecisionRecallDisplay
+)
+
+###############################################################
+# Predictions
+###############################################################
+
+print("=" * 70)
+print("Evaluating Tuned LightGBM Model")
+print("=" * 70)
+
+lgbm_pred = best_lgbm.predict(X_test)
+
+lgbm_prob = best_lgbm.predict_proba(
+    X_test
+)[:,1]
+
+###############################################################
+# Metrics
+###############################################################
+
+lgbm_accuracy = accuracy_score(
+    y_test,
+    lgbm_pred
+)
+
+lgbm_precision = precision_score(
+    y_test,
+    lgbm_pred
+)
+
+lgbm_recall = recall_score(
+    y_test,
+    lgbm_pred
+)
+
+lgbm_f1 = f1_score(
+    y_test,
+    lgbm_pred
+)
+
+lgbm_auc = roc_auc_score(
+    y_test,
+    lgbm_prob
+)
+
+###############################################################
+# Classification Report
+###############################################################
+
+print("\nClassification Report\n")
+
+print(
+    classification_report(
+        y_test,
+        lgbm_pred
+    )
+)
+
+###############################################################
+# Save Metrics
+###############################################################
+
+metrics = pd.DataFrame({
+
+    "Metric":[
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "F1 Score",
+        "ROC AUC"
+    ],
+
+    "Value":[
+        lgbm_accuracy,
+        lgbm_precision,
+        lgbm_recall,
+        lgbm_f1,
+        lgbm_auc
+    ]
+
+})
+
+metrics.to_csv(
+
+    "outputs/reports/lightgbm_test_metrics.csv",
+
+    index=False
+
+)
+
+###############################################################
+# Confusion Matrix
+###############################################################
+
+cm = confusion_matrix(
+    y_test,
+    lgbm_pred
+)
+
+disp = ConfusionMatrixDisplay(
+    confusion_matrix=cm
+)
+
+fig, ax = plt.subplots(figsize=(6,6))
+
+disp.plot(ax=ax)
+
+plt.title("LightGBM Confusion Matrix")
+
+plt.savefig(
+
+    "outputs/figures/lightgbm_confusion_matrix.png",
+
+    dpi=300,
+
+    bbox_inches="tight"
+
+)
+
+plt.close()
+
+###############################################################
+# ROC Curve
+###############################################################
+
+fig, ax = plt.subplots(figsize=(7,6))
+
+RocCurveDisplay.from_predictions(
+
+    y_test,
+
+    lgbm_prob,
+
+    ax=ax
+
+)
+
+plt.title("LightGBM ROC Curve")
+
+plt.savefig(
+
+    "outputs/figures/lightgbm_roc_curve.png",
+
+    dpi=300,
+
+    bbox_inches="tight"
+
+)
+
+plt.close()
+
+###############################################################
+# Precision Recall Curve
+###############################################################
+
+fig, ax = plt.subplots(figsize=(7,6))
+
+PrecisionRecallDisplay.from_predictions(
+
+    y_test,
+
+    lgbm_prob,
+
+    ax=ax
+
+)
+
+plt.title("LightGBM Precision-Recall Curve")
+
+plt.savefig(
+
+    "outputs/figures/lightgbm_pr_curve.png",
+
+    dpi=300,
+
+    bbox_inches="tight"
+
+)
+
+plt.close()
+
+###############################################################
+# Feature Importance
+###############################################################
+
+feature_names = (
+
+    best_lgbm
+
+    .named_steps["preprocessor"]
+
+    .get_feature_names_out()
+
+)
+
+feature_importance = (
+
+    best_lgbm
+
+    .named_steps["classifier"]
+
+    .feature_importances_
+
+)
+
+importance_df = pd.DataFrame({
+
+    "Feature":feature_names,
+
+    "Importance":feature_importance
+
+})
+
+importance_df = importance_df.sort_values(
+
+    by="Importance",
+
+    ascending=False
+
+)
+
+importance_df.to_csv(
+
+    "outputs/reports/lightgbm_feature_importance.csv",
+
+    index=False
+
+)
+
+###############################################################
+# Top 25 Features
+###############################################################
+
+top25 = importance_df.head(25)
+
+plt.figure(figsize=(10,8))
+
+plt.barh(
+
+    top25["Feature"][::-1],
+
+    top25["Importance"][::-1]
+
+)
+
+plt.title("Top 25 LightGBM Features")
+
+plt.xlabel("Importance")
+
+plt.tight_layout()
+
+plt.savefig(
+
+    "outputs/figures/lightgbm_feature_importance.png",
+
+    dpi=300,
+
+    bbox_inches="tight"
+
+)
+
+plt.close()
+
+###############################################################
+# Prediction Results
+###############################################################
+
+prediction_df = X_test.copy()
+
+prediction_df["Actual"] = y_test.values
+
+prediction_df["Prediction"] = lgbm_pred
+
+prediction_df["Probability"] = lgbm_prob
+
+prediction_df.to_csv(
+
+    "outputs/reports/lightgbm_predictions.csv",
+
+    index=False
+
+)
+
+###############################################################
+# Save Final Model
+###############################################################
+
+joblib.dump(
+
+    best_lgbm,
+
+    "models/final_lightgbm_model.pkl"
+
+)
+
+###############################################################
+# Summary
+###############################################################
+
+summary = pd.DataFrame({
+
+    "Metric":[
+
+        "Accuracy",
+
+        "Precision",
+
+        "Recall",
+
+        "F1 Score",
+
+        "ROC AUC",
+
+        "Best CV ROC AUC"
+
+    ],
+
+    "Value":[
+
+        lgbm_accuracy,
+
+        lgbm_precision,
+
+        lgbm_recall,
+
+        lgbm_f1,
+
+        lgbm_auc,
+
+        lgbm_search.best_score_
+
+    ]
+
+})
+
+summary.to_csv(
+
+    "outputs/reports/lightgbm_summary_report.csv",
+
+    index=False
+
+)
+
+print("\n")
+print("="*70)
+print("LIGHTGBM FINAL PERFORMANCE")
+print("="*70)
+
+print(summary)
+
+print("\nSaved Successfully")
+
+print("✔ final_lightgbm_model.pkl")
+
+print("✔ lightgbm_predictions.csv")
+
+print("✔ lightgbm_summary_report.csv")
+
+print("✔ lightgbm_feature_importance.csv")
+
+print("✔ lightgbm_confusion_matrix.png")
+
+print("✔ lightgbm_roc_curve.png")
+
+print("✔ lightgbm_pr_curve.png")
+
+print("✔ lightgbm_feature_importance.png")
+
+print("\nPART 2B.2 - SECTION B COMPLETED")
